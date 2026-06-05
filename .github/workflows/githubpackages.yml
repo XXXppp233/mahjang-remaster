@@ -1,0 +1,33 @@
+name: Deploy App to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送到类似 v1.0.0 的标签时触发
+
+jobs:
+  Push-to-Packages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # GitHub 自动生成的临时 Token
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/my-app:latest
+            ghcr.io/${{ github.repository }}/my-app:${{ github.ref_name }}
