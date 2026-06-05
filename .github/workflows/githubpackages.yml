@@ -2,9 +2,8 @@ name: Deploy App to GitHub Packages
 
 on:
   push:
-    tags:
-      - 'v*' # 当推送到类似 v1.0.0 的标签时触发
-
+    branches:
+      - master
 jobs:
   Push-to-Packages:
     runs-on: ubuntu-latest
