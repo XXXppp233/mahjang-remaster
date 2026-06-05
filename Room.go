@@ -686,6 +686,7 @@ func (r *Room) ExecuteAction(a Action) {
 	actionTiles := []string{}
 	switch a.Type {
 	case 1: // Chow
+		r.removeDiscardedOut(r.GameState.CurrentUser, r.GameState.Out)
 		tiles := []string{r.GameState.Out}
 		for _, i := range a.Selec {
 			tiles = append(tiles, p.Hands[i])
@@ -698,6 +699,7 @@ func (r *Room) ExecuteAction(a Action) {
 		r.GameState.CurrentUser = a.Player
 		r.GameState.Out = ""
 	case 2: // Pong
+		r.removeDiscardedOut(r.GameState.CurrentUser, r.GameState.Out)
 		tiles := []string{r.GameState.Out, p.Hands[a.Selec[0]], p.Hands[a.Selec[1]]}
 		actionTiles = append(actionTiles, tiles...)
 		p.Lock = append(p.Lock, tiles...)
@@ -709,6 +711,7 @@ func (r *Room) ExecuteAction(a Action) {
 	case 3: // Kong
 		tiles := make([]string, 0, len(a.Selec)+1)
 		if r.GameState.CurrentUser != a.Player {
+			r.removeDiscardedOut(r.GameState.CurrentUser, r.GameState.Out)
 			tiles = append(tiles, r.GameState.Out)
 		}
 		for _, i := range a.Selec {
@@ -743,6 +746,19 @@ func (r *Room) ExecuteAction(a Action) {
 	}
 	r.Broadcast()
 	r.BroadcastAction(actionLabel, actionTiles, p.Uuid)
+}
+
+func (r *Room) removeDiscardedOut(playerIndex int, tile string) {
+	if tile == "" || playerIndex < 0 || playerIndex >= len(r.GameState.PlayerInfo) {
+		return
+	}
+	discarded := r.GameState.PlayerInfo[playerIndex].Discarded
+	for i := len(discarded) - 1; i >= 0; i-- {
+		if discarded[i] == tile {
+			r.GameState.PlayerInfo[playerIndex].Discarded = append(discarded[:i], discarded[i+1:]...)
+			return
+		}
+	}
 }
 
 func actionName(actionType int) string {
