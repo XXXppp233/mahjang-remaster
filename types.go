@@ -37,6 +37,7 @@ type Player struct {
 	CharactersGroup string
 	Character       string
 	Playing         bool // 当玩家掉线时，如果 Playing 为 True 则会等待玩家重连回到房间，
+	Online          bool // 玩家是否在线，掉线时会设置为 false，重连时设置为 true
 }
 type Grade struct {
 	First  int

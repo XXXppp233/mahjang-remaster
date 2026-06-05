@@ -94,6 +94,11 @@ func (r *Room) AddUser(user *Player) (bool, int) {
 
 func (r *Room) RemoveUser(user *Player) (bool, int) {
 	if r.Playing {
+		for _, p := range r.Player {
+			if p.Uuid == user.Uuid {
+				p.Online = false
+			}
+		}
 		return false, 13
 	}
 	for i, p := range r.Player {

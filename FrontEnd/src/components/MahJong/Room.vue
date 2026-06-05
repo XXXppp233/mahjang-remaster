@@ -75,6 +75,26 @@
                 <button class="bold-btn" @click="updateRule">保存规则</button>
               </div>
             </div>
+
+            <div v-if="activePanel === 'gameover' && gameOver" class="panel-content game-over">
+              <div class="game-over-head">
+                <div class="winner-avatar">
+                  <img :src="winnerHead" :alt="gameOver.chara || gameOver.name" />
+                </div>
+                <div class="winner-info">
+                  <p class="game-over-label">Game Over</p>
+                  <h2>{{ gameOver.name }}</h2>
+                  <p>{{ gameOver.chara || '佚名' }}, {{ gameOver.org || 'nameless' }}</p>
+                  <strong>Score {{ gameOver.score }}</strong>
+                </div>
+              </div>
+
+              <div class="winning-tiles" aria-label="胡牌牌型">
+                <span v-for="(tile, index) in gameOver.tiles" :key="`${tile}-${index}`" class="winning-tile">
+                  <img :src="`tilesvgs/${tileColor}/${tile}.svg`" :alt="tile" />
+                </span>
+              </div>
+            </div>
           </section>
         </div>
       </div>
@@ -134,6 +154,15 @@ import { statusStore } from '@/stores/status'
 const status = statusStore()
 const members = computed(() => status.getMembers(status.mysid))
 const isMeReady = computed(() => status.members[status.mysid]?.ready)
+const gameOver = computed(() => status.gameOver)
+const tileColor = computed(() =>
+  window.matchMedia('(prefers-color-scheme: dark)').matches ? 'Black' : 'Regular',
+)
+const winnerHead = computed(() =>
+  gameOver.value
+    ? status.getCharacterHead(gameOver.value.org, gameOver.value.chara)
+    : 'tilesvgs/Regular/Blank.svg',
+)
 const canStartGame = computed(() => {
   const allMembers = Object.values(status.members)
   return status.isOwner && allMembers.length === 4 && allMembers.every((member) => member.ready)
@@ -183,6 +212,14 @@ watch(
 watch(isMeReady, (ready) => {
   if (ready && activePanel.value === 'org') activePanel.value = ''
 })
+
+watch(
+  gameOver,
+  (next) => {
+    if (next) activePanel.value = 'gameover'
+  },
+  { immediate: true },
+)
 
 function togglePanel(panel) {
   activePanel.value = activePanel.value === panel ? '' : panel
@@ -258,6 +295,7 @@ async function updateRule() {
 async function startGame() {
   if (!canStartGame.value) return
   try {
+    activePanel.value = ''
     await status.startGameRemote()
   } catch (e) {
     alert(e.message)
@@ -329,6 +367,101 @@ async function startGame() {
 
 .rule-config {
   overflow-y: auto;
+}
+
+.game-over {
+  justify-content: space-between;
+}
+
+.game-over-head {
+  display: grid;
+  grid-template-columns: 15vh 1fr;
+  gap: 2vw;
+  align-items: center;
+  min-height: 17vh;
+}
+
+.winner-avatar {
+  width: 15vh;
+  height: 15vh;
+  border: 0.4vh solid #111;
+  border-radius: 0.4vh;
+  background: #fff;
+  box-shadow: 0.45vh 0.45vh 0 #111;
+  overflow: hidden;
+}
+
+.winner-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.winner-info {
+  min-width: 0;
+}
+
+.game-over-label {
+  margin: 0 0 0.5vh;
+  font-size: 2vh;
+  font-weight: 900;
+  color: #ff4d4d;
+}
+
+.winner-info h2 {
+  margin: 0;
+  font-size: 4vh;
+  line-height: 1.05;
+  font-weight: 900;
+  color: #111;
+  text-decoration: underline 0.35vh #111;
+  overflow-wrap: anywhere;
+}
+
+.winner-info p {
+  margin: 0.8vh 0;
+  font-size: 2vh;
+  font-weight: 800;
+  color: #444;
+  overflow-wrap: anywhere;
+}
+
+.winner-info strong {
+  display: block;
+  font-size: 2.3vh;
+  color: #111;
+}
+
+.winning-tiles {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 1vh 0.4vw 0.8vh;
+}
+
+.winning-tile {
+  flex: 0 0 auto;
+  width: 3vw;
+  height: 8vh;
+  min-width: 2.8rem;
+  box-sizing: border-box;
+  padding: 0.18vw;
+  border: 0.3vw solid #111;
+  border-radius: 0.25vw;
+  box-shadow: 0.25vh 0.25vh 0 #111;
+  margin-left: -0.15vw;
+}
+
+.winning-tile:first-child {
+  margin-left: 0;
+}
+
+.winning-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .rule-row {

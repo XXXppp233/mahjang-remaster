@@ -160,6 +160,16 @@ type GameActionEvent = {
   nonce: number
 }
 
+type GameOverInfo = {
+  uuid: string
+  name: string
+  org: string
+  chara: string
+  score: number
+  tiles: string[]
+  nonce: number
+}
+
 const blankCharacter: CharacterInfo = {
   name: '',
   head: 'tilesvgs/Regular/Blank.svg',
@@ -406,6 +416,7 @@ export const statusStore = defineStore('status', () => {
   })
   const ruleList = ref<RuleOption[]>([])
   const actionEvent = ref<GameActionEvent | null>(null)
+  const gameOver = ref<GameOverInfo | null>(null)
 
   const now = computed(() => {
     if (!isLogin.value) return 'nologin'
@@ -656,6 +667,7 @@ export const statusStore = defineStore('status', () => {
     players.value = undefined
     myid.value = 0
     roomlist.value = []
+    gameOver.value = null
     reSetGameInfo()
     isLogin.value = false
     isRoomList.value = false
@@ -666,6 +678,7 @@ export const statusStore = defineStore('status', () => {
 
   function joinRoom(id: string) {
     roomid.value = id
+    gameOver.value = null
     if (!ownerSid.value && Object.keys(members.value).length === 0) ownerSid.value = mysid.value
     resetTempCharacter()
     isRoom.value = true
@@ -684,6 +697,7 @@ export const statusStore = defineStore('status', () => {
     players.value = undefined
     myid.value = 0
     members.value = {}
+    gameOver.value = null
     isRoom.value = false
     isRoomList.value = true
     isGaming.value = false
@@ -692,6 +706,7 @@ export const statusStore = defineStore('status', () => {
   }
 
   function startGame() {
+    gameOver.value = null
     isGaming.value = true
     isRoom.value = true
     isRoomList.value = false
@@ -894,11 +909,24 @@ export const statusStore = defineStore('status', () => {
   function updateActionEvent(data: any) {
     const action = data.action
     if (!['chow', 'pong', 'kong', 'hu'].includes(action) || !data.uuid) return
-    actionEvent.value = {
+    const event = {
       action,
       tiles: Array.isArray(data.tiles) ? data.tiles : [],
       uuid: data.uuid,
       nonce: Date.now(),
+    }
+    actionEvent.value = event
+    if (action === 'hu') {
+      const winner = members.value[data.uuid]
+      gameOver.value = {
+        uuid: data.uuid,
+        name: winner?.name ?? data.uuid,
+        org: winner?.decorator?.org ?? '',
+        chara: winner?.decorator?.chara ?? '',
+        score: Number(winner?.score ?? 0),
+        tiles: event.tiles,
+        nonce: event.nonce,
+      }
     }
   }
 
@@ -925,6 +953,7 @@ export const statusStore = defineStore('status', () => {
     roomRule,
     ruleList,
     actionEvent,
+    gameOver,
     needsReconnect,
     isOwner,
     members,

@@ -278,6 +278,18 @@ func handleStream(c *gin.Context) {
 							"left": true,
 						})
 					}
+				} else { // 所有玩家离线则解散房间
+					roomPlayer := len(room.Player)
+					for _, p := range room.Player {
+						if !p.Online {
+							roomPlayer--
+						}
+					}
+					if roomPlayer == 0 {
+						RoomsMu.Lock()
+						delete(Rooms, room.Id)
+						RoomsMu.Unlock()
+					}
 				}
 			}
 			delete(Players, p.Uuid)
