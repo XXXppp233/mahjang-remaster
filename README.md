@@ -1,6 +1,8 @@
 # MahJong LTS
 福州麻将的重制版，未来会长期更新支持
 
+# 即刻体验官方版本
+[https://mahjong.wepayto.win](https://mahjong.wepayto.win)
 
 # 技术栈
 - MikuTap
@@ -24,6 +26,7 @@
 - full
 - confirm
 - critical
+
 `head` 角色头像，`full` 角色全身像格式应为 `webp`，`confirm` 为选择角色时触发的语音，`critical`为触发吃碰杠后播放的特效，格式应为支持透明(Alpha)通道的 `webm`。绑定一个域名并设置 CORS 规则。
 
 注意使用 Safai WebView 的 iOS 系列浏览器对 webm 的支持并不友好，所以禁用了特效。
