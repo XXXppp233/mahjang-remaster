@@ -94,7 +94,9 @@ func main() {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexData)
 	})
 
-	r.Run(":8080")
+
+	port := getEnv("PORT", "8080")
+	r.Run(":" + port)
 }
 
 // func characterAssetOrigins() []string {

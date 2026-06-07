@@ -3,6 +3,7 @@ module mahjong-server
 go 1.26.3
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.41.11
 	github.com/aws/aws-sdk-go-v2/config v1.32.22
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.21
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.1
@@ -11,7 +12,6 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.41.11 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.12 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.27 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.27 // indirect
