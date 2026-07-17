@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const databaseFilename = "MahJongLTS.db"
@@ -47,7 +48,13 @@ func OpenStore() (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", path+"?_busy_timeout=5000&_foreign_keys=on&_journal_mode=WAL")
+	databaseURL := &url.URL{Scheme: "file", Path: path}
+	query := databaseURL.Query()
+	query.Add("_pragma", "busy_timeout(5000)")
+	query.Add("_pragma", "foreign_keys(1)")
+	query.Add("_pragma", "journal_mode(WAL)")
+	databaseURL.RawQuery = query.Encode()
+	db, err := sql.Open("sqlite", databaseURL.String())
 	if err != nil {
 		return nil, err
 	}
