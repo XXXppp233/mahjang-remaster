@@ -3,9 +3,9 @@
     <div class="box" :class="{ active: isActive, compact }">
       <div class="summary-row">
         <div class="playerhead">
-          <button class="test-button" @click.ctrl.exact="clicktestbutton">
+          <div class="avatar-frame">
             <img class="characterhead" :src="`${url}`" :alt="`${charactername}`" />
-          </button>
+          </div>
         </div>
         <div class="playerinfo">
           <h3>{{ memberinfo.name }}</h3>
@@ -76,14 +76,12 @@ watch(discarded, (newVal, oldVal) => {
     return
   } else if (newVal.length >= oldVal.length) {
     // 出牌
-    console.log('牌数增加')
     setTimeout(() => {
       shownnum.value = newVal.length
     }, 2000) // 2秒后取消特写
     //shownnum.value += 1
   } else {
     // 牌被杠走
-    console.log('牌数减少')
     shownnum.value = newVal.length
   }
 })
@@ -93,12 +91,6 @@ const url = computed(() =>
     ? status.getCharacterHead(organization.value, charactername.value)
     : 'tilesvgs/Regular/Blank.svg',
 )
-
-//后续会改成点击头像会触发一个语音，这里为了测试改为触发特写
-const emit = defineEmits(['click-head'])
-const clicktestbutton = () => {
-  emit('click-head', organization.value, charactername.value)
-}
 
 </script>
 
@@ -148,7 +140,7 @@ const clicktestbutton = () => {
 .box.compact .summary-row {
   display: contents;
 }
-.test-button {
+.avatar-frame {
   border: 0.3vh solid #111;
   height: 100%;
   width: 100%;

@@ -46,7 +46,6 @@ const pending = ref(false)
 async function handleAction() {
   if (pending.value) return
   const status = statusStore()
-  console.log('handleAction', props.actionid, props.label)
   let action = ''
   let body = { PlayerIndex: status.myid }
 
@@ -62,7 +61,6 @@ async function handleAction() {
   //   action = 'chow'
   //   body = { ...body, Selec: props.data }
   } else {
-    console.log('未知操作')
     return
   }
 

@@ -8,6 +8,7 @@ import MahjongGame from './components/MahJong/MahjongGame.vue'
 import Intro from './components/MahJong/Intro.vue'
 import RoomList from './components/MahJong/RoomList.vue'
 import Room from './components/MahJong/Room.vue'
+import ReplayViewer from './components/MahJong/ReplayViewer.vue'
 
 const status = statusStore()
 const now = computed(() => status.now)
@@ -38,6 +39,7 @@ watch(
   <RoomList v-if="now === 'roomlist'" />
   <Room v-if="now === 'room'" />
   <MahjongGame v-if="now === 'gaming'" />
+  <ReplayViewer v-if="now === 'replay'" />
 </template>
 
 <style></style>

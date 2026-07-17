@@ -27,7 +27,6 @@ const FocusAni = async (organization, charactername) => {
     const response = await fetch(focusurl.value, { method: 'HEAD' })
     const contentType = response.headers.get('Content-Type')
     if (response.ok && contentType && contentType.startsWith('video')) {
-      console.log('video exists:', focusurl.value)
       showVideo.value = true
       await nextTick()
       videoPlayer.value?.play()

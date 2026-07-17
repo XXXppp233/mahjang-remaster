@@ -16,6 +16,9 @@ dist-ssr
 coverage
 *.local
 mahjong-server
+MahJongLTS.db
+MahJongLTS.db-shm
+MahJongLTS.db-wal
 
 /cypress/videos/
 /cypress/screenshots/

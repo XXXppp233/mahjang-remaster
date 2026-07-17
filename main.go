@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"embed"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -18,6 +20,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const roomIDAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+func newRoomID() string {
+	b := make([]byte, 16)
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		panic(err)
+	}
+	for i := range b {
+		b[i] = roomIDAlphabet[int(raw[i])%len(roomIDAlphabet)]
+	}
+	return string(b)
+}
+
 //go:embed FrontEnd/dist/*
 var frontend embed.FS
 
@@ -29,9 +45,17 @@ var (
 	ServerKeys = make(map[string]*rsa.PrivateKey)
 	SSEClients = make(map[string]map[chan string]struct{}) // [uuid]: channels
 	SSEMu      sync.RWMutex
+	Database   *Store
 )
 
 func main() {
+	var err error
+	Database, err = OpenStore()
+	if err != nil {
+		panic("unable to open state database: " + err.Error())
+	}
+	defer Database.Close()
+
 	r := gin.Default()
 
 	// API Routes
@@ -48,6 +72,7 @@ func main() {
 			auth.POST("/logout", handleLogout)
 			auth.GET("/stream", handleStream)
 			auth.GET("/rooms", handleRooms)
+			auth.GET("/replays/:roomid/download", handleReplayDownload)
 			auth.POST("/rooms/create", handleCreateRoom)
 			auth.POST("/rooms/join", handleJoinRoom)
 			auth.POST("/rooms/leave", handleLeaveRoom)
@@ -93,7 +118,6 @@ func main() {
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", indexData)
 	})
-
 
 	port := getEnv("PORT", "8080")
 	r.Run(":" + port)
@@ -241,6 +265,12 @@ func hasSSEClient(playerUuid string) bool {
 	return len(SSEClients[playerUuid]) > 0
 }
 
+func sseClientCount(playerUuid string) int {
+	SSEMu.RLock()
+	defer SSEMu.RUnlock()
+	return len(SSEClients[playerUuid])
+}
+
 func sendSSETo(playerUuid string, msg string) {
 	SSEMu.RLock()
 	defer SSEMu.RUnlock()
@@ -257,23 +287,30 @@ func sendSSETo(playerUuid string, msg string) {
 func handleStream(c *gin.Context) {
 	playerRaw, _ := c.Get("player")
 	p := playerRaw.(*Player)
+	_ = Database.SetOnline(c.Request.Context(), p)
 
 	ch := make(chan string, 100)
 	registerSSEClient(p.Uuid, ch)
 
 	defer func() {
 		hasConnections := unregisterSSEClient(p.Uuid, ch)
+		if !hasConnections {
+			_ = Database.DeleteOnline(context.Background(), p.Uuid)
+		}
 
 		if !GlobalConf.LoginRequire && !hasConnections {
 			PlayersMu.Lock()
 			if p.Room != nil {
 				room := p.Room
 				if success, _ := room.RemoveUser(p); success {
+					_ = Database.DeletePlayer(context.Background(), p.Uuid)
 					if len(room.Player) == 0 {
 						RoomsMu.Lock()
 						delete(Rooms, room.Id)
 						RoomsMu.Unlock()
+						_ = Database.DeleteRoom(context.Background(), room.Id)
 					} else {
+						_ = Database.SaveRoom(context.Background(), room)
 						room.BroadcastEvent(gin.H{
 							"type": "room_user",
 							"uuid": p.Uuid,
@@ -380,6 +417,10 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": false, "message": "Account is required"})
 		return
 	}
+	if strings.EqualFold(strings.TrimSpace(req.Account), "Server") {
+		c.JSON(http.StatusBadRequest, gin.H{"status": false, "message": "Server is a reserved name"})
+		return
+	}
 
 	var playerUuid string
 	var player *Player
@@ -400,6 +441,10 @@ func handleLogin(c *gin.Context) {
 		PlayersMu.Lock()
 		Players[playerUuid] = player
 		PlayersMu.Unlock()
+		if err := Database.SetOnline(c.Request.Context(), player); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": false, "message": "Failed to record online player"})
+			return
+		}
 	} else {
 		c.JSON(http.StatusNotImplemented, gin.H{"status": false, "message": "Login with database is currently not supported"})
 		return
@@ -434,7 +479,7 @@ func handleCreateRoom(c *gin.Context) {
 
 	room := &Room{
 		Name: req.Name,
-		Id:   uuid.New().String(),
+		Id:   newRoomID(),
 		RoomRule: RoomRule{
 			Rule:       0,
 			MaxWaiting: 10,
@@ -449,6 +494,11 @@ func handleCreateRoom(c *gin.Context) {
 	RoomsMu.Lock()
 	Rooms[room.Id] = room
 	RoomsMu.Unlock()
+	if err := Database.SaveRoom(c.Request.Context(), room); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": false, "message": "Failed to persist room"})
+		return
+	}
+	_ = Database.SaveLobbyPlayer(c.Request.Context(), room.Id, p)
 
 	c.JSON(http.StatusOK, roomJoinResponse(room, p))
 }
@@ -495,6 +545,8 @@ func handleJoinRoom(c *gin.Context) {
 		return
 	}
 	p.Room = room
+	_ = Database.SaveRoom(c.Request.Context(), room)
+	_ = Database.SaveLobbyPlayer(c.Request.Context(), room.Id, p)
 	if info := room.GetPlayerInfo(p.Uuid); info != nil {
 		info.Online = true
 	}
@@ -537,10 +589,13 @@ func leavePlayer(c *gin.Context, p *Player, roomID string) {
 	}
 
 	room.RemoveUser(p)
+	_ = Database.DeletePlayer(c.Request.Context(), p.Uuid)
+	_ = Database.SaveRoom(c.Request.Context(), room)
 	if len(room.Player) == 0 {
 		RoomsMu.Lock()
 		delete(Rooms, room.Id)
 		RoomsMu.Unlock()
+		_ = Database.DeleteRoom(c.Request.Context(), room.Id)
 	} else {
 		room.BroadcastEvent(gin.H{
 			"type":  "room_user",
@@ -620,6 +675,8 @@ func handleRoomUserUnready(c *gin.Context, p *Player) {
 	if info := p.Room.GetPlayerInfo(p.Uuid); info != nil {
 		info.Ready = false
 	}
+	_ = Database.SaveLobbyPlayer(c.Request.Context(), p.Room.Id, p)
+	_ = Database.SaveRoom(c.Request.Context(), p.Room)
 
 	p.Room.BroadcastEvent(gin.H{
 		"type":  "room_user",
@@ -661,6 +718,8 @@ func handleRoomUserKick(c *gin.Context, p *Player) {
 
 	room := p.Room
 	room.RemoveUser(targetPlayer)
+	_ = Database.DeletePlayer(c.Request.Context(), targetPlayer.Uuid)
+	_ = Database.SaveRoom(c.Request.Context(), room)
 	reason := "您已被房主踢出房间"
 	room.BroadcastEvent(gin.H{
 		"type":   "room_user",
@@ -722,11 +781,14 @@ func handleRoomUserReady(c *gin.Context, p *Player) {
 	p.Ready = true
 	p.CharactersGroup = req.Decorator.Org
 	p.Character = req.Decorator.Chara
+	_ = Database.SaveLobbyPlayer(c.Request.Context(), p.Room.Id, p)
 	if info := p.Room.GetPlayerInfo(p.Uuid); info != nil {
 		info.Ready = true
 		info.CharactersGroup = p.CharactersGroup
 		info.Character = p.Character
+		_ = Database.SavePlayer(c.Request.Context(), p.Room.Id, *info)
 	}
+	_ = Database.SaveRoom(c.Request.Context(), p.Room)
 
 	p.Room.BroadcastEvent(gin.H{
 		"type":  "room_user",
@@ -745,6 +807,11 @@ func handleRoomUserReady(c *gin.Context, p *Player) {
 func handleLogout(c *gin.Context) {
 	playerRaw, _ := c.Get("player")
 	p := playerRaw.(*Player)
+	if sseClientCount(p.Uuid) > 1 {
+		c.JSON(http.StatusOK, gin.H{"status": true, "sharedSession": true})
+		return
+	}
+	_ = Database.DeleteOnline(c.Request.Context(), p.Uuid)
 
 	if p.Room != nil {
 		if info := p.Room.GetPlayerInfo(p.Uuid); info != nil {
@@ -775,6 +842,24 @@ func handleLogout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": true})
+}
+
+func handleReplayDownload(c *gin.Context) {
+	playerRaw, _ := c.Get("player")
+	p := playerRaw.(*Player)
+	roomID := c.Param("roomid")
+	if p.Room == nil || p.Room.Id != roomID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Replay does not belong to the current room"})
+		return
+	}
+	replay, err := Database.ExportReplay(c.Request.Context(), roomID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Replay not found"})
+		return
+	}
+	filename := fmt.Sprintf("MahJongLTS-%s-%d.json", roomID, replay.ExportedAt)
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	c.JSON(http.StatusOK, replay)
 }
 
 func handleRooms(c *gin.Context) {
@@ -882,6 +967,8 @@ func handleGameAction(c *gin.Context) {
 
 	var res bool
 	var errCode int
+	room.mu.Lock()
+	defer room.mu.Unlock()
 
 	switch action {
 	case "discard":

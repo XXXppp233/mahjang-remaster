@@ -1,5 +1,7 @@
 package main
 
+import mahjonglib "mahjong-server/mahjong"
+
 // var tiles = map[string]int{
 // "Man1": 1,
 // "Man2": 2,
@@ -46,20 +48,6 @@ type Grade struct {
 	Fourth int
 }
 
-type Rule struct {
-	Golden    bool // 是否启用金牌/癞子
-	Season    bool // 是否启用春夏秋冬牌
-	Flowers   bool // 是否启用梅兰竹菊牌
-	Winds     bool // 是否启用东南西北牌
-	Chun      bool // 是否启用中
-	Hatsu     bool // 是否启用发财
-	Haku      bool // 是否启用白板
-	Chow      bool // 是否允许吃
-	Pong      bool // 是否允许碰
-	Kong      bool // 是否允许杠
-	Expose    bool // True 为不允许暗杠，即杠自己的牌也会显示牌面
-	SevenPair bool // 七对子，仅在 Total == 14 时生效
-	Total     int  // 玩家手牌数量
-}
+type Rule = mahjonglib.Rule
 
 type OfflineList map[string]*Room // [uuid]: Room

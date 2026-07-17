@@ -47,7 +47,6 @@ const onInputBlur = () => {
 
 async function sendMessage() {
   if (newMessage.value.trim() === '') return
-  console.log('Sending message:', newMessage.value)
 
   await status.apiFetch(
     `/rooms/chat?roomid=${encodeURIComponent(status.roomid)}&uuid=${encodeURIComponent(status.mysid)}`,

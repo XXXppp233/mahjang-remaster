@@ -103,6 +103,9 @@
     </div>
 
     <aside v-if="!status.isGaming" class="room-actions">
+      <div v-if="gameOver?.replayUrl" class="action-group">
+        <button class="bold-btn replay-download" @click="downloadReplay">下载对局录像</button>
+      </div>
       <div class="action-group">
         <button class="bold-btn danger" @click="leaveRoom">退出房间</button>
         <button v-if="isMeReady" class="bold-btn" @click="unready">取消准备</button>
@@ -299,6 +302,25 @@ async function startGame() {
     await status.startGameRemote()
   } catch (e) {
     alert(e.message)
+  }
+}
+
+async function downloadReplay() {
+  if (!gameOver.value?.replayUrl) return
+  try {
+    const response = await status.apiFetch(gameOver.value.replayUrl)
+    if (!response.ok) throw new Error('录像下载失败')
+    const blob = await response.blob()
+    const disposition = response.headers.get('content-disposition') ?? ''
+    const filename = disposition.match(/filename="?([^";]+)"?/)?.[1] ?? `MahJongLTS-${status.roomid}.json`
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    alert(error instanceof Error ? error.message : '录像下载失败')
   }
 }
 </script>
@@ -582,6 +604,13 @@ async function startGame() {
 .bold-btn.danger {
   background: #ff4d4d;
   color: #fff;
+}
+
+.bold-btn.replay-download {
+  color: #fff;
+  background: #1677ff;
+  border-color: #0b3f91;
+  box-shadow: 0.4vh 0.4vh 0 #0b3f91;
 }
 
 .bold-btn.small {

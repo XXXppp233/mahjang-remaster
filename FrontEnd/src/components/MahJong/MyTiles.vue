@@ -8,7 +8,6 @@ import { statusStore } from '@/stores/status'
 import { tilesmapStore } from '@/stores/tilesmap'
 import keySounds from '/src/assets/keyboardsounds/MikuTap/main.js'
 
-const props = defineProps({})
 const status = statusStore()
 const tilesmap = tilesmapStore()
 // const keySoundType = ref('MikuTap') // default value
@@ -63,7 +62,6 @@ const select = (index) => {
   } else {
     selectedIndex.value = index // 选中手牌
   }
-  console.log('selectedIndex', selectedIndex.value, hands.value[index])
 }
 const selectAction = ref(6) // 6 为无效选择，0~5 为吃碰杠胡等操作
 
@@ -73,7 +71,6 @@ const handleKeyPress = (event) => {
   if (status.isTyping) return
 
   if (event.key.toLowerCase() === 'q') {
-    console.log('Q key pressed')
     // 在这里添加 Q 键的处理逻辑
     // 例如：选择上一张牌
     if (selectedIndex.value > 0) {
@@ -81,7 +78,6 @@ const handleKeyPress = (event) => {
     }
     keySounds.Play(event) // 播放 Q 键音效
   } else if (event.key.toLowerCase() === 'e') {
-    console.log('E key pressed')
     // 在这里添加 E 键的处理逻辑
     // 例如：选择下一张牌
     const maxIndex = newtile.value ? hands.value.length : hands.value.length - 1
@@ -95,10 +91,8 @@ const handleKeyPress = (event) => {
     if (actionsnumber.value === 0) return // 没有操作时不响应数字键
     if (actionIndex < actionsnumber.value) {
       if(selectAction.value === actionIndex){
-        console.log('取消选择')
         selectAction.value = 6 // 再次按相同数字键取消选择
       }else{
-        console.log('选择: ', actionIndex)
         selectAction.value = actionIndex
       } // 0-5 的选择
       // 在这里添加对应操作的处理逻辑
@@ -115,25 +109,19 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyPress)
 })
 
-// 测试
-const emit = defineEmits(['click-head'])
-const clicktestbutton = () => {
-  console.log(organization.value, charactername.value)
-  emit('click-head', organization.value, charactername.value)
-}
 </script>
 
 <template>
   <div class="box" :class="{ active: isActive }">
     <div class="my-dashboard">
       <div class="my-profile">
-        <button class="test-button" @click.ctrl.exact="clicktestbutton">
+        <div class="avatar-frame">
           <img
             class="characterhead"
             :src="headurl"
             :alt="`${charactername}`"
           />
-        </button>
+        </div>
         <div class="profile-text">
           <h3>{{ username }}</h3>
           <h4>{{ charactername }}, {{ organization }}</h4>
@@ -221,7 +209,7 @@ span {
   gap: 1vw;
   align-items: stretch;
 }
-.test-button {
+.avatar-frame {
   z-index: 1;
   border: 0.4vh solid #111;
   height: 100%;
@@ -231,7 +219,6 @@ span {
   background-color: #fff;
   overflow: hidden;
   box-shadow: 0.5vh 0.5vh 0 #111;
-  cursor: pointer;
 }
 
 .my-profile {
@@ -244,7 +231,7 @@ span {
   min-height: 16vh;
   align-items: center;
 }
-.my-profile .test-button {
+.my-profile .avatar-frame {
   grid-row: 1 / 4;
   width: 6.5vw;
   height: 6.5vw;

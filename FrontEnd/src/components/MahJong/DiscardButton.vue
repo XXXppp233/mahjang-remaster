@@ -62,7 +62,6 @@ async function submitDiscard() {
       pending.value = false
     }
   } else {
-    console.log('你现在不能出牌')
   }
 }
 

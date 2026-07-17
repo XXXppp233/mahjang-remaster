@@ -1,14 +1,21 @@
 package main
 
 import (
+	"context"
+	cryptorand "crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"sort"
+	"strings"
+	"sync"
 	"time"
+
+	mahjonglib "mahjong-server/mahjong"
 )
 
 type Room struct {
+	mu        sync.Mutex
 	Name      string // userinput
 	Id        string
 	Player    []*Player // 0 号位是房主，其他人可以自由交换位置，房主交换位置会转移房主的资格
@@ -32,6 +39,7 @@ type GameState struct {
 	WaitingResponse bool   // 玩家出牌后会等待两秒其他玩家操作，即使没有玩家能够操作
 	Out             string // 用户打出的牌
 	ActionQueue     ActionQueue
+	ShuffleSeed     uint32
 }
 type PlayerInfo struct {
 	Uuid            string
@@ -298,117 +306,7 @@ func (r *Room) CheckHu(p *PlayerInfo) (bool, int) {
 }
 
 func (r *Room) CanHu(tiles []string, goldenCount int) bool {
-	// 三金
-	if goldenCount >= 3 {
-		return true
-	}
-
-	// 尝试每个可能的雀头
-	for i := 0; i < len(tiles); i++ {
-		// 1. 两张相同的普通牌
-		if i+1 < len(tiles) && tiles[i] == tiles[i+1] {
-			remaining := append([]string{}, tiles[:i]...)
-			remaining = append(remaining, tiles[i+2:]...)
-			if r.isAllSets(remaining, goldenCount) {
-				return true
-			}
-		}
-		// 2. 一张普通牌 + 一张金牌
-		if goldenCount >= 1 {
-			remaining := append([]string{}, tiles[:i]...)
-			remaining = append(remaining, tiles[i+1:]...)
-			if r.isAllSets(remaining, goldenCount-1) {
-				return true
-			}
-		}
-	}
-	// 3. 两张金牌
-	if goldenCount == 2 {
-		if r.isAllSets(tiles, goldenCount-2) {
-			return true
-		}
-	}
-	return false
-}
-
-func (r *Room) isAllSets(tiles []string, goldenCount int) bool {
-	if len(tiles) == 0 {
-		return goldenCount%3 == 0
-	}
-
-	first := tiles[0]
-	// 尝试刻子
-	count := 0
-	for _, t := range tiles {
-		if t == first {
-			count++
-		}
-	}
-	// 1. 三张相同
-	if count >= 3 {
-		if r.isAllSets(tiles[3:], goldenCount) {
-			return true
-		}
-	}
-	// 2. 两张相同 + 一张金牌
-	if count >= 2 && goldenCount >= 1 {
-		if r.isAllSets(tiles[2:], goldenCount-1) {
-			return true
-		}
-	}
-	// 3. 一张相同 + 两张金牌
-	if count >= 1 && goldenCount >= 2 {
-		if r.isAllSets(tiles[1:], goldenCount-2) {
-			return true
-		}
-	}
-
-	// 尝试顺子
-	var tObj tile
-	ft := tObj.Parse(first)
-	if ft.Num != 0 && ft.Num <= 7 {
-		t2 := fmt.Sprintf("%s%d", ft.Face, ft.Num+1)
-		t3 := fmt.Sprintf("%s%d", ft.Face, ft.Num+2)
-
-		idx2, idx3 := -1, -1
-		for i, t := range tiles {
-			if t == t2 && idx2 == -1 {
-				idx2 = i
-			} else if t == t3 && idx3 == -1 {
-				idx3 = i
-			}
-		}
-
-		if idx2 != -1 && idx3 != -1 {
-			rem := removeIndices(tiles, 0, idx2, idx3)
-			if r.isAllSets(rem, goldenCount) {
-				return true
-			}
-		}
-		if idx2 != -1 && goldenCount >= 1 {
-			rem := removeIndices(tiles, 0, idx2)
-			if r.isAllSets(rem, goldenCount-1) {
-				return true
-			}
-		}
-		if idx3 != -1 && goldenCount >= 1 {
-			rem := removeIndices(tiles, 0, idx3)
-			if r.isAllSets(rem, goldenCount-1) {
-				return true
-			}
-		}
-	}
-
-	// 如果金牌足够直接补一个顺子（以当前第一张牌ft配合金牌）
-	// 情况已经在上面 idx2/idx3 为 -1 且 goldenCount 足够时处理了一部分
-	// 还可以有 ft + gold + gold
-	if goldenCount >= 2 {
-		if r.isAllSets(tiles[1:], goldenCount-2) {
-			return true
-		}
-	}
-
-	return false
+	return mahjonglib.CanHu(tiles, goldenCount)
 }
 
 func (r *Room) Broadcast() {
@@ -504,8 +402,12 @@ func (r *Room) Start() {
 	}
 	r.Starting = false
 	r.Playing = true
-	rand.Seed(time.Now().UnixNano())
 	r.GameState = GameState{}
+	var seedBytes [4]byte
+	if _, err := cryptorand.Read(seedBytes[:]); err != nil {
+		panic(err)
+	}
+	r.GameState.ShuffleSeed = binary.LittleEndian.Uint32(seedBytes[:])
 	r.GameState.Wall = r.buildWall()
 
 	// 发牌
@@ -530,6 +432,10 @@ func (r *Room) Start() {
 		sortTiles(r.GameState.PlayerInfo[i].Hands)
 	}
 	r.GameState.CurrentUser = 0
+	if Database != nil {
+		_ = Database.StartGameLog(context.Background(), r, uint64(r.GameState.ShuffleSeed), mahjonglib.ShuffleAlgorithm)
+		r.persistState()
+	}
 	r.Draw()
 	r.Broadcast()
 }
@@ -592,7 +498,11 @@ func (r *Room) buildWall() []string {
 	}
 
 	if rule.Golden && len(tiles) > 0 {
-		goldenIndex := rand.Intn(len(tiles))
+		var random [4]byte
+		if _, err := cryptorand.Read(random[:]); err != nil {
+			panic(err)
+		}
+		goldenIndex := int(binary.LittleEndian.Uint32(random[:]) % uint32(len(tiles)))
 		r.GameState.GoldenTile = tiles[goldenIndex]
 		tiles[goldenIndex] = "Golden"
 	}
@@ -600,9 +510,7 @@ func (r *Room) buildWall() []string {
 	wall := append([]string{}, tiles...)
 	wall = append(wall, wall...)
 	wall = append(wall, wall...)
-	rand.Shuffle(len(wall), func(i, j int) {
-		wall[i], wall[j] = wall[j], wall[i]
-	})
+	mahjonglib.Shuffle(wall, r.GameState.ShuffleSeed)
 	return wall
 }
 
@@ -614,10 +522,15 @@ func (r *Room) Draw() {
 	p := &r.GameState.PlayerInfo[r.GameState.CurrentUser]
 	p.New = r.GameState.Wall[0]
 	r.GameState.Wall = r.GameState.Wall[1:]
+	if Database != nil {
+		r.persistState()
+	}
 	r.Broadcast()
 	if r.RoomRule.SkipOffline && !hasSSEClient(p.Uuid) {
 		go func(index int) {
 			time.Sleep(100 * time.Millisecond)
+			r.mu.Lock()
+			defer r.mu.Unlock()
 			if r.Playing && r.GameState.CurrentUser == index && r.GameState.PlayerInfo[index].New != "" {
 				r.Discard(&r.GameState.PlayerInfo[index], len(r.GameState.PlayerInfo[index].Hands))
 			}
@@ -649,6 +562,10 @@ func (r *Room) Discard(pInfo *PlayerInfo, selec int) (bool, int) {
 	}
 	sortTiles(pInfo.Hands)
 	pInfo.Discarded = append(pInfo.Discarded, r.GameState.Out)
+	if Database != nil {
+		_ = Database.LogAction(context.Background(), r.Id, pInfo.Uuid, "Discard", r.GameState.Out)
+		r.persistState()
+	}
 
 	r.GameState.WaitingResponse = true
 	r.GameState.ActionQueue = nil
@@ -657,6 +574,8 @@ func (r *Room) Discard(pInfo *PlayerInfo, selec int) (bool, int) {
 	// 启动 2s 定时器
 	go func() {
 		time.Sleep(2 * time.Second)
+		r.mu.Lock()
+		defer r.mu.Unlock()
 		r.ProcessActions()
 	}()
 	return true, 0
@@ -684,6 +603,12 @@ func (r *Room) ExecuteAction(a Action) {
 	p := &r.GameState.PlayerInfo[a.Player]
 	actionLabel := actionName(a.Type)
 	actionTiles := []string{}
+	selectedTiles := make([]string, 0, len(a.Selec))
+	for _, index := range a.Selec {
+		if index >= 0 && index < len(p.Hands) {
+			selectedTiles = append(selectedTiles, p.Hands[index])
+		}
+	}
 	switch a.Type {
 	case 1: // Chow
 		r.removeDiscardedOut(r.GameState.CurrentUser, r.GameState.Out)
@@ -729,6 +654,10 @@ func (r *Room) ExecuteAction(a Action) {
 		r.GameState.CurrentUser = a.Player
 		r.GameState.Out = ""
 		r.Draw()
+		if Database != nil {
+			_ = Database.LogAction(context.Background(), r.Id, p.Uuid, "Kong", strings.Join(selectedTiles, ","))
+			r.persistState()
+		}
 		r.BroadcastAction(actionLabel, actionTiles, p.Uuid)
 		return
 	case 4: // Hu
@@ -740,12 +669,49 @@ func (r *Room) ExecuteAction(a Action) {
 		} else if r.GameState.Out != "" {
 			actionTiles = append(actionTiles, r.GameState.Out)
 		}
+		from := p.Uuid
+		if r.GameState.CurrentUser != a.Player {
+			from = r.GameState.PlayerInfo[r.GameState.CurrentUser].Uuid
+		}
+		if Database != nil {
+			_ = Database.LogAction(context.Background(), r.Id, p.Uuid, "Hu", from)
+		}
 		r.EndGameReady()
 		r.BroadcastAction(actionLabel, actionTiles, p.Uuid)
 		return
 	}
+	if Database != nil {
+		_ = Database.LogAction(context.Background(), r.Id, p.Uuid, actionLogName(a.Type), strings.Join(selectedTiles, ","))
+		r.persistState()
+	}
 	r.Broadcast()
 	r.BroadcastAction(actionLabel, actionTiles, p.Uuid)
+}
+
+func actionLogName(actionType int) string {
+	switch actionType {
+	case 1:
+		return "Chow"
+	case 2:
+		return "Pong"
+	case 3:
+		return "Kong"
+	case 4:
+		return "Hu"
+	default:
+		return ""
+	}
+}
+
+func (r *Room) persistState() {
+	if Database == nil {
+		return
+	}
+	ctx := context.Background()
+	_ = Database.SaveRoom(ctx, r)
+	for _, p := range r.GameState.PlayerInfo {
+		_ = Database.SavePlayer(ctx, r.Id, p)
+	}
 }
 
 func (r *Room) removeDiscardedOut(playerIndex int, tile string) {
@@ -780,12 +746,16 @@ func (r *Room) BroadcastAction(action string, tiles []string, uuid string) {
 	if action == "" {
 		return
 	}
-	r.BroadcastEvent(map[string]any{
+	payload := map[string]any{
 		"type":   "action",
 		"action": action,
 		"tiles":  tiles,
 		"uuid":   uuid,
-	})
+	}
+	if action == "hu" {
+		payload["replay_url"] = "/api/replays/" + r.Id + "/download"
+	}
+	r.BroadcastEvent(payload)
 }
 
 func removeIndices(tiles []string, indices ...int) []string {
@@ -862,6 +832,9 @@ func (r *Room) EndGameReady() {
 	for _, p := range r.Player {
 		p.Playing = false
 		p.Ready = true
+	}
+	if Database != nil {
+		_ = Database.SaveRoom(context.Background(), r)
 	}
 	r.Broadcast()
 }

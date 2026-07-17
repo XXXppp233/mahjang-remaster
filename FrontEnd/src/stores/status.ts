@@ -84,13 +84,17 @@ const playerStorageKey = 'mahjong.uuid'
 const storageActions = ['confirm', 'critical', 'full', 'head'] as const
 
 function loadPlayerUuid() {
-  return sessionStorage.getItem(playerStorageKey) ?? ''
+	return localStorage.getItem(playerStorageKey) ?? sessionStorage.getItem(playerStorageKey) ?? ''
 }
 
-function savePlayerUuid(uuid: string) {
+function savePlayerUuid(uuid: string, persistent = false) {
   if (!uuid) return
-  sessionStorage.setItem(playerStorageKey, uuid)
-  localStorage.removeItem(playerStorageKey)
+	sessionStorage.setItem(playerStorageKey, uuid)
+  if (persistent) {
+    localStorage.setItem(playerStorageKey, uuid)
+  } else {
+    localStorage.removeItem(playerStorageKey)
+  }
 }
 
 function clearPlayerUuid() {
@@ -168,7 +172,11 @@ type GameOverInfo = {
   score: number
   tiles: string[]
   nonce: number
+  replayUrl: string
 }
+
+export type ReplayEvent = { seq: number; timestamp: number; user: string; action: string; value: string }
+export type ReplayData = { version: number; room_id: string; exported_at: number; events: ReplayEvent[] }
 
 const blankCharacter: CharacterInfo = {
   name: '',
@@ -417,8 +425,10 @@ export const statusStore = defineStore('status', () => {
   const ruleList = ref<RuleOption[]>([])
   const actionEvent = ref<GameActionEvent | null>(null)
   const gameOver = ref<GameOverInfo | null>(null)
+  const replayData = ref<ReplayData | null>(null)
 
   const now = computed(() => {
+	if (replayData.value) return 'replay'
     if (!isLogin.value) return 'nologin'
     if (isGaming.value) return 'gaming'
     if (isRoom.value) return 'room'
@@ -457,7 +467,7 @@ export const statusStore = defineStore('status', () => {
       third: Number(user.Grade?.['3rd'] ?? 0),
       fourth: Number(user.Grade?.['4th'] ?? 0),
     }
-    if (mysid.value) savePlayerUuid(mysid.value)
+    if (mysid.value) savePlayerUuid(mysid.value, loginRequire.value)
     if (username.value) isLogin.value = true
   }
 
@@ -470,6 +480,10 @@ export const statusStore = defineStore('status', () => {
     characterGroups.value = parseCharacterUrls(Array.isArray(data.CharactersMap) ? data.CharactersMap : [])
     ensureTempOrg()
     applyUser(data.User)
+    if (!loginRequire.value && data.User?.Uuid) {
+      sessionStorage.setItem(playerStorageKey, data.User.Uuid)
+      localStorage.removeItem(playerStorageKey)
+    }
   }
 
   async function loadCharacterMap() {
@@ -535,8 +549,9 @@ export const statusStore = defineStore('status', () => {
   }
 
   async function logoutRemote() {
-    await apiFetch('/logout', { method: 'POST' }).catch(() => undefined)
-    logout()
+	const res = await apiFetch('/logout', { method: 'POST' }).catch(() => null)
+	const data = await res?.json().catch(() => ({}))
+	logout(Boolean(data?.sharedSession))
   }
 
   async function enterLobby() {
@@ -636,7 +651,7 @@ export const statusStore = defineStore('status', () => {
   function connectToServer(sid: string) {
     connected.value = true
     mysid.value = sid
-    savePlayerUuid(sid)
+    savePlayerUuid(sid, loginRequire.value)
   }
 
   function lostConnection() {
@@ -658,7 +673,7 @@ export const statusStore = defineStore('status', () => {
     isLogin.value = true
   }
 
-  function logout() {
+	function logout(preserveSharedIdentity = false) {
     username.value = ''
     mysid.value = ''
     roomid.value = ''
@@ -673,8 +688,15 @@ export const statusStore = defineStore('status', () => {
     isRoomList.value = false
     isRoom.value = false
     isGaming.value = false
-    clearPlayerUuid()
+		if (!preserveSharedIdentity) clearPlayerUuid()
   }
+
+  function openReplay(data: ReplayData) {
+	if (!data || data.version !== 1 || !Array.isArray(data.events)) throw new Error('不支持的录像文件')
+	replayData.value = data
+  }
+
+  function closeReplay() { replayData.value = null }
 
   function joinRoom(id: string) {
     roomid.value = id
@@ -926,6 +948,7 @@ export const statusStore = defineStore('status', () => {
         score: Number(winner?.score ?? 0),
         tiles: event.tiles,
         nonce: event.nonce,
+		replayUrl: String(data.replay_url ?? ''),
       }
     }
   }
@@ -954,6 +977,7 @@ export const statusStore = defineStore('status', () => {
     ruleList,
     actionEvent,
     gameOver,
+	replayData,
     needsReconnect,
     isOwner,
     members,
@@ -979,6 +1003,8 @@ export const statusStore = defineStore('status', () => {
     lostConnection,
     sucLogin,
     logout,
+	openReplay,
+	closeReplay,
     updateRoomList,
     updateRoomUser,
     updateGameState,

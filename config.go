@@ -51,6 +51,10 @@ func loadS3Assets() {
 	S3Region := getEnv("S3_REGION", "us-east-1")
 	S3Bucket := getEnv("S3_BUCKET", "mahjong")
 	ap := getEnv("S3_ACCESS_POINT", "")
+	// Character storage is optional for local and test deployments.
+	if strings.TrimSpace(S3Endpoint) == "" || strings.TrimSpace(ap) == "" {
+		return
+	}
 	cred := credentials.NewStaticCredentialsProvider(S3AccessKeyID, S3SecretAccessKey, "")
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(S3Region),

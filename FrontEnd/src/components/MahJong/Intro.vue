@@ -34,7 +34,9 @@
       </div>
       <p v-if="status.needsReconnect" class="reconnect-note">有未完成的对局</p>
       <button class="enter active big-btn" @click="enterLobby">进入大厅</button>
+      <button class="enter active big-btn" @click="replayInput?.click()">观看录像</button>
       <button class="enter active big-btn" @click="handleLogout">退出登录</button>
+      <input ref="replayInput" class="replay-input" type="file" accept="application/json,.json" @change="openReplay" />
     </div>
   </div>
   <div class="mahjor" @wheel="mouseWheel">
@@ -104,6 +106,7 @@ const promptText = computed(() => {
 })
 
 const inputRef = ref(null)
+const replayInput = ref(null)
 const isPressed = ref(false)
 
 const pressEnter = () => {
@@ -174,6 +177,18 @@ async function handleLogout() {
   inputValue.value = ''
 }
 
+async function openReplay(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  try {
+    status.openReplay(JSON.parse(await file.text()))
+  } catch (error) {
+    alert(error instanceof Error ? error.message : '录像文件无法解析')
+  } finally {
+    event.target.value = ''
+  }
+}
+
 const mouseWheel = (event) => {
   event.preventDefault()
   if (event.deltaY < 0) {
@@ -190,6 +205,7 @@ const mouseWheel = (event) => {
 </script>
 
 <style scoped>
+.replay-input { display: none; }
 .intro {
   display: flex;
   flex-direction: column;

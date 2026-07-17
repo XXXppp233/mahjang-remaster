@@ -188,7 +188,6 @@ export const tilesmapStore = defineStore('tilemap', () => {
         actionsdata.push(choice.selec ?? choice.tiles ?? [])
       }
     }
-    console.log('getActionData', actions, actionsdata)
     return actionsdata
   }
 
