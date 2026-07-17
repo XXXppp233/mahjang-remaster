@@ -1,6 +1,10 @@
 # MahJong LTS
 福州麻将的重制版，未来会长期更新支持
 
+## 观看对局录像
+本项目使用 Fisher–Yates Shuffle 洗牌算法确保结果可以复现
+[示例对局](./MahJongLTS-Example.json)
+
 # 即刻体验官方版本
 [https://mahjong.wepayto.win](https://mahjong.wepayto.win)
 
@@ -9,12 +13,7 @@
 - Gin
 - Vue
 - SSE
-
-# TODO
-- ✅ S3 兼容存储以存储可以选择的角色
-- 显示 IP 归属地
-- 云端数据库以启用 LoginRequire
-- KV 缓存数据库查询结果
+- S3
 
 ## 麻将规则
 - ✅福州麻将
@@ -22,7 +21,7 @@
 # 自己部署
 ## S3 兼容存储
 需要准备角色素材，S3 存储桶内应有以下四个文件夹
-- head
+- head (必要)
 - full
 - confirm
 - critical
