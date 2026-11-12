@@ -116,7 +116,7 @@ func loadS3Assets() int {
 }
 
 func loadAssets() {
-	file, _ := os.ReadFile("FrontEnd/dist/assets.json")
+	file, _ := frontend.ReadFile("FrontEnd/dist/assets.json")
 	err := json.Unmarshal(file, &assets)
 	if err != nil {
 		panic(err)
