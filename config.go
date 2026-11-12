@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -25,11 +28,28 @@ type Config struct {
 	ShowIPLocation bool
 }
 
-var GlobalConf Config
+type Assets struct {
+	CharactersMap struct {
+		Urls  []string `json:"Urls"`
+		Index []struct {
+			Head     map[string][]string `json:"head"`
+			Critical map[string][]string `json:"critical"`
+			Confirm  map[string][]string `json:"confirm"`
+			Full     map[string][]string `json:"full"`
+		} `json:"Index"`
+	} `json:"CharactersMap"`
+}
+
+var (
+	GlobalConf Config
+	assets     Assets
+)
 
 func init() {
-
-	loadS3Assets()
+	ret := loadS3Assets()
+	if ret != 0 {
+		loadAssets()
+	}
 	// LOGIN_REQUIRE, default false
 	loginRequireStr := getEnv("LOGIN_REQUIRE", "false")
 	GlobalConf.LoginRequire = strings.ToLower(loginRequireStr) == "true"
@@ -44,7 +64,8 @@ func getEnv(key, fallback string) string {
 	}
 	return fallback
 }
-func loadS3Assets() {
+
+func loadS3Assets() int {
 	S3Endpoint := getEnv("S3_ENDPOINT", "")
 	S3AccessKeyID := getEnv("S3_ACCESS_KEY_ID", "")
 	S3SecretAccessKey := getEnv("S3_SECRET_ACCESS_KEY", "")
@@ -53,7 +74,7 @@ func loadS3Assets() {
 	ap := getEnv("S3_ACCESS_POINT", "")
 	// Character storage is optional for local and test deployments.
 	if strings.TrimSpace(S3Endpoint) == "" || strings.TrimSpace(ap) == "" {
-		return
+		return 1
 	}
 	cred := credentials.NewStaticCredentialsProvider(S3AccessKeyID, S3SecretAccessKey, "")
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
@@ -61,7 +82,8 @@ func loadS3Assets() {
 		config.WithCredentialsProvider(cred),
 	)
 	if err != nil {
-		panic("unable to load AWS SDK config, " + err.Error())
+		return 2
+		//		panic("unable to load AWS SDK config, " + err.Error())
 	}
 	s3Client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(S3Endpoint)
@@ -72,7 +94,8 @@ func loadS3Assets() {
 	}
 	result, err := s3Client.ListObjectsV2(context.TODO(), input)
 	if err != nil {
-		panic("unable to list S3 objects, " + err.Error())
+		return 3
+		//		panic("unable to list S3 objects, " + err.Error())
 	}
 
 	for _, object := range result.Contents {
@@ -81,5 +104,51 @@ func loadS3Assets() {
 			GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, "https://"+ap+"/"+key)
 		}
 	}
+	return 0
+}
 
+func loadAssets() {
+	file, _ := os.ReadFile("assets.json")
+	err := json.Unmarshal(file, &assets)
+	if err != nil {
+		panic(err)
+	}
+	os.MkdirAll("FrontEnd/public/head", os.ModePerm)
+	os.MkdirAll("FrontEnd/public/critical", os.ModePerm)
+	os.MkdirAll("FrontEnd/public/confirm", os.ModePerm)
+	os.MkdirAll("FrontEnd/public/full", os.ModePerm)
+	for u, ur := range assets.CharactersMap.Urls {
+		for org, charas := range assets.CharactersMap.Index[u].Head {
+			os.Mkdir("FrontEnd/public/head/"+org, os.ModePerm)
+			for _, chara := range charas {
+				req, _ := http.Get(ur + "/head/" + org + "/" + chara + ".webp")
+				body, _ := io.ReadAll(req.Body)
+				os.WriteFile("public/head/"+org+"/"+chara+".webp", body, os.ModePerm)
+			}
+		}
+		for org, charas := range assets.CharactersMap.Index[u].Critical {
+			os.Mkdir("FrontEnd/public/critical/"+org, os.ModePerm)
+			for _, chara := range charas {
+				req, _ := http.Get(ur + "/critical/" + org + "/" + chara + ".webm")
+				body, _ := io.ReadAll(req.Body)
+				os.WriteFile("public/critical/"+org+"/"+chara+".webm", body, os.ModePerm)
+			}
+		}
+		for org, charas := range assets.CharactersMap.Index[u].Confirm {
+			os.Mkdir("FrontEnd/public/confirm/"+org, os.ModePerm)
+			for _, chara := range charas {
+				req, _ := http.Get(ur + "/confirm/" + org + "/" + chara + ".webm")
+				body, _ := io.ReadAll(req.Body)
+				os.WriteFile("public/confirm/"+org+"/"+chara+".webm", body, os.ModePerm)
+			}
+		}
+		for org, charas := range assets.CharactersMap.Index[u].Full {
+			os.Mkdir("FrontEnd/public/full/"+org, os.ModePerm)
+			for _, chara := range charas {
+				req, _ := http.Get(ur + "/full/" + org + "/" + chara + ".webp")
+				body, _ := io.ReadAll(req.Body)
+				os.WriteFile("public/full/"+org+"/"+chara+".webp", body, os.ModePerm)
+			}
+		}
+	}
 }
