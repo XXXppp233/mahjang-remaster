@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "npm run download-assets && run-p type-check \"build-only {@}\" --",
+    "download-assets": "node scripts/download-assets.js",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",

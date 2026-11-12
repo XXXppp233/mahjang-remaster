@@ -1,0 +1,64 @@
+{
+  "CharactersMap": {
+    "Urls": [
+      "https://cm.mahjong.wepayto.win"
+    ],
+    "Index": [
+      {
+        "head": {
+          "Persona": [
+            "Joker",
+            "Death",
+            "Makoto",
+            "Sae"
+          ],
+          "Monogatari": [
+            "Aries",
+            "Cancer",
+            "Fan",
+            "Genshin Impact",
+            "Karen",
+            "Kiss Shot",
+            "Kiss Shot mini",
+            "MoonFire",
+            "Neko",
+            "Snails",
+            "Snake",
+            "Yeah"
+          ],
+          "LLM": [
+            "ChatGPT",
+            "Claude",
+            "Copilot",
+            "DeepSeek",
+            "Gemini",
+            "Github Copilot",
+            "Grok",
+            "Qwen"
+          ],
+          "Honkai Impact": [
+            "AI",
+            "Bronya",
+            "Elysia",
+            "Fuka",
+            "Heel",
+            "Kallen",
+            "Kiana",
+            "Rita",
+            "Seel",
+            "Sirin",
+            "Teriri",
+            "Yaezakura"
+          ]
+        },
+        "critical": {
+          "Persona": [
+            "Joker",
+            "Makoto",
+            "Sae"
+          ]
+        }
+      }
+    ]
+  }
+}

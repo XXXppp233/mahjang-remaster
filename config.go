@@ -3,8 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
+	"fmt"
 	"os"
 	"strings"
 
@@ -43,9 +42,18 @@ type Assets struct {
 var (
 	GlobalConf Config
 	assets     Assets
+	HOST       string
 )
 
 func init() {
+	HOST = getEnv("HOST", "http://localhost:8080")
+	if HOST == "" {
+		return
+	}
+	if !strings.HasPrefix(HOST, "https://") && !strings.HasPrefix(HOST, "http://") {
+		HOST = "https://" + HOST
+	}
+	fmt.Println("HOST:", HOST)
 	ret := loadS3Assets()
 	if ret != 0 {
 		loadAssets()
@@ -108,46 +116,30 @@ func loadS3Assets() int {
 }
 
 func loadAssets() {
-	file, _ := os.ReadFile("assets.json")
+	file, _ := os.ReadFile("FrontEnd/dist/assets.json")
 	err := json.Unmarshal(file, &assets)
 	if err != nil {
 		panic(err)
 	}
-	os.MkdirAll("FrontEnd/public/head", os.ModePerm)
-	os.MkdirAll("FrontEnd/public/critical", os.ModePerm)
-	os.MkdirAll("FrontEnd/public/confirm", os.ModePerm)
-	os.MkdirAll("FrontEnd/public/full", os.ModePerm)
-	for u, ur := range assets.CharactersMap.Urls {
+	for u := range assets.CharactersMap.Urls {
 		for org, charas := range assets.CharactersMap.Index[u].Head {
-			os.Mkdir("FrontEnd/public/head/"+org, os.ModePerm)
 			for _, chara := range charas {
-				req, _ := http.Get(ur + "/head/" + org + "/" + chara + ".webp")
-				body, _ := io.ReadAll(req.Body)
-				os.WriteFile("public/head/"+org+"/"+chara+".webp", body, os.ModePerm)
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/head/"+org+"/"+chara+".webp")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Critical {
-			os.Mkdir("FrontEnd/public/critical/"+org, os.ModePerm)
 			for _, chara := range charas {
-				req, _ := http.Get(ur + "/critical/" + org + "/" + chara + ".webm")
-				body, _ := io.ReadAll(req.Body)
-				os.WriteFile("public/critical/"+org+"/"+chara+".webm", body, os.ModePerm)
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/critical/"+org+"/"+chara+".webm")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Confirm {
-			os.Mkdir("FrontEnd/public/confirm/"+org, os.ModePerm)
 			for _, chara := range charas {
-				req, _ := http.Get(ur + "/confirm/" + org + "/" + chara + ".webm")
-				body, _ := io.ReadAll(req.Body)
-				os.WriteFile("public/confirm/"+org+"/"+chara+".webm", body, os.ModePerm)
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/confirm/"+org+"/"+chara+".webm")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Full {
-			os.Mkdir("FrontEnd/public/full/"+org, os.ModePerm)
 			for _, chara := range charas {
-				req, _ := http.Get(ur + "/full/" + org + "/" + chara + ".webp")
-				body, _ := io.ReadAll(req.Body)
-				os.WriteFile("public/full/"+org+"/"+chara+".webp", body, os.ModePerm)
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/full/"+org+"/"+chara+".webp")
 			}
 		}
 	}
