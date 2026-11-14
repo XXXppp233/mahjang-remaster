@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -42,18 +41,9 @@ type Assets struct {
 var (
 	GlobalConf Config
 	assets     Assets
-	HOST       string
 )
 
 func init() {
-	HOST = getEnv("HOST", "http://localhost:8080")
-	if HOST == "" {
-		return
-	}
-	if !strings.HasPrefix(HOST, "https://") && !strings.HasPrefix(HOST, "http://") {
-		HOST = "https://" + HOST
-	}
-	fmt.Println("HOST:", HOST)
 	ret := loadS3Assets()
 	if ret != 0 {
 		loadAssets()
@@ -124,22 +114,22 @@ func loadAssets() {
 	for u := range assets.CharactersMap.Urls {
 		for org, charas := range assets.CharactersMap.Index[u].Head {
 			for _, chara := range charas {
-				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/head/"+org+"/"+chara+".webp")
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, "/head/"+org+"/"+chara+".webp")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Critical {
 			for _, chara := range charas {
-				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/critical/"+org+"/"+chara+".webm")
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, "/critical/"+org+"/"+chara+".webm")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Confirm {
 			for _, chara := range charas {
-				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/confirm/"+org+"/"+chara+".webm")
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, "/confirm/"+org+"/"+chara+".webm")
 			}
 		}
 		for org, charas := range assets.CharactersMap.Index[u].Full {
 			for _, chara := range charas {
-				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, HOST+"/full/"+org+"/"+chara+".webp")
+				GlobalConf.CharactersMap = append(GlobalConf.CharactersMap, "/full/"+org+"/"+chara+".webp")
 			}
 		}
 	}

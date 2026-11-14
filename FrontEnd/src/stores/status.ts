@@ -110,11 +110,17 @@ function parseCharacterUrls(urls: string[]): Record<string, CharacterInfo[]> {
   const groups: Record<string, Record<string, CharacterInfo>> = {}
 
   urls.forEach((rawUrl) => {
+    // The config may contain either absolute URLs or paths served by the
+    // current site. Resolve paths before parsing so stored character assets
+    // keep a usable URL as well as a pathname we can inspect.
+    const resolvedUrl = /^https?:\/\//i.test(rawUrl)
+      ? rawUrl
+      : `${window.location.origin}/${rawUrl.replace(/^\/+/, '')}`
     let parts: string[]
     try {
-      parts = new URL(rawUrl).pathname.split('/').filter((part) => part)
+      parts = new URL(resolvedUrl).pathname.split('/').filter((part) => part)
     } catch {
-      parts = rawUrl.split('/').filter((part) => part)
+      parts = resolvedUrl.split('/').filter((part) => part)
     }
     if (parts.length < 3) return
 
@@ -133,7 +139,7 @@ function parseCharacterUrls(urls: string[]): Record<string, CharacterInfo[]> {
       confirm: '',
       critical: '',
     }
-    groups[org][name][action] = rawUrl
+    groups[org][name][action] = resolvedUrl
   })
 
   return Object.fromEntries(
